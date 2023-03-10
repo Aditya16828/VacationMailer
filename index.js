@@ -27,7 +27,10 @@ app.get("/authentication", (req, res) => {
                     "https://www.googleapis.com/auth/userinfo.email", 
                     "https://www.googleapis.com/auth/userinfo.profile",
                     "https://www.googleapis.com/auth/gmail.addons.current.action.compose",
-                    "https://www.googleapis.com/auth/gmail.addons.current.message.action"];
+                    "https://www.googleapis.com/auth/gmail.addons.current.message.action",
+                    "https://www.googleapis.com/auth/gmail.readonly",
+                    "https://www.googleapis.com/auth/gmail.labels",
+                    "https://www.googleapis.com/auth/gmail.modify"];
     
     const url = oauth2Client.generateAuthUrl({
         access_type: "offline",
@@ -49,7 +52,6 @@ app.get("/", async (req, res) => {
     const queryURL = new urlparse(req.url);
     const code = queryParse.parse(queryURL.query).code;
 
-    // console.log(code);
 
     const oauth2Client = new google.auth.OAuth2(
         CLIENTID,
@@ -59,12 +61,71 @@ app.get("/", async (req, res) => {
 
     const tokens = await oauth2Client.getToken(code);
 
-    console.log(tokens);
+
+    try {
+        let labels = (await axios.get('https://gmail.googleapis.com/gmail/v1/users/me/labels', {headers: {
+            authorization: "Bearer "+tokens.tokens.access_token 
+        }})).data.labels;
+
+        let labelNames = labels.map((ele) => ele.name);
+
+        // console.log(labels);
+
+        const customLabel = 'VACATION MAILS';
+        let customLabelid;
+
+        if(!labelNames.includes(customLabel)){
+            // create a new label
+            const response = (await axios.post('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
+                labelListVisibility: "labelShow",
+                messageListVisibility: "show",
+                name: customLabel
+            }, {headers: {authorization: "Bearer "+tokens.tokens.access_token}})).data;
+
+            console.log(response);
+            customLabelid = response.id;
+        } else {
+            for(let i=0;i < labels.length;i++){
+                if(labels[i].name==customLabel){
+                    customLabelid = labels[i].id;
+                    break;
+                }
+            }
+        }
+
+
+        const msgs = (await axios.get('https://gmail.googleapis.com/gmail/v1/users/me/messages', {params: {
+            q: "is:unread"
+        }, headers: {
+            authorization: "Bearer "+tokens.tokens.access_token
+        }})).data;
+
+        let msgids = [];
+
+        (msgs.messages).forEach(async element => {
+            if(element.id == element.threadId) {
+                // const msgDetails = (await axios.get(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${element.id}`, {headers: {authorization: "Bearer "+tokens.tokens.access_token}})).data;
+
+                // send the messages
+
+                msgids.push(element.id);
+            }            
+        });
+
+        const response = (await axios.post('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify', {
+            ids: msgids,
+            addLabelIds: [customLabelid]
+        }, {headers: {authorization: "Bearer "+tokens.tokens.access_token}})).data;
+
+        console.log(response);
+
+    } catch (error) {
+        console.log(error);
+        throw error;
+    }
 
     res.send("Details sent to console");
-
-    
-})
+});
 
 app.listen(PORT, () => {
     console.log("Server started at ", PORT);
