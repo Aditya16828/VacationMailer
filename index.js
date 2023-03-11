@@ -6,6 +6,8 @@ import urlparse from 'url-parse';
 import bodyParser from 'body-parser';
 import queryParse from 'query-string';
 import axios from 'axios';
+import { Message } from 'emailjs'
+import base64url from 'base64url';
 
 import {PORT, CLIENTID, CLIENTSECRET} from './serverConfig.js';
 
@@ -98,19 +100,64 @@ app.get("/", async (req, res) => {
             q: "is:unread"
         }, headers: {
             authorization: "Bearer "+tokens.tokens.access_token
-        }})).data;
+        }})).data.messages;
 
         let msgids = [];
+        // console.log(msgs);
 
-        (msgs.messages).forEach(async element => {
+        msgs.forEach(async (element) => {
             if(element.id == element.threadId) {
-                // const msgDetails = (await axios.get(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${element.id}`, {headers: {authorization: "Bearer "+tokens.tokens.access_token}})).data;
+                msgids.push(element.id);
+
+                const msgDetails = (await axios.get(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${element.id}`, {
+                    headers: {authorization: "Bearer "+tokens.tokens.access_token}
+                })).data;
 
                 // send the messages
+                // console.log(msgDetails.payload.headers);
 
-                msgids.push(element.id);
-            }            
+                let sender, recipient;
+
+                (msgDetails.payload.headers).forEach(async element => {
+                    if(element.name == 'From'){
+                        sender = element.value.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi);
+                    }
+
+                    if(element.name == 'To'){
+                        recipient = element.value.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi);
+                    }
+                })
+
+
+                const message = new Message({
+                    text: "On Vacation",
+                    to: [sender],
+                    from: recipient,
+                    subject: msgDetails.snippet
+                });
+
+                const encodedMessage = base64url(message.toString());
+
+                const createMessage = {
+                    raw: encodedMessage
+                };
+
+                const response = (await axios.post('https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send', 
+                                                    {message: createMessage}, 
+                                                    {headers:  
+                                                        {
+                                                            Authorization: "Bearer "+tokens.tokens.access_token,
+                                                            'Content-Type': 'message/rfc822'
+                                                        }
+                                })).data;
+                console.log(response.id);
+
+                // const gmail = google.gmail({ version: 'v1', auth });
+                // const res = await gmail.users.messages.send({userId: 'me', requestBody: {raw: encodedMessage}});
+            }
         });
+
+        console.log(msgids);
 
         const response = (await axios.post('https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify', {
             ids: msgids,
@@ -120,7 +167,7 @@ app.get("/", async (req, res) => {
         console.log(response);
 
     } catch (error) {
-        console.log(error);
+        console.log(error.data);
         throw error;
     }
 
