@@ -94,7 +94,7 @@ app.get("/", async (req, res) => {
 
                 const msgDetails = await getMsgDetails(tokens.tokens.access_token, element.id);
 
-                let sender, recipient;
+                let sender, recipient, subject;
 
                 (msgDetails.payload.headers).forEach(async element => {
                     if (element.name == 'From') {
@@ -104,9 +104,13 @@ app.get("/", async (req, res) => {
                     if (element.name == 'To') {
                         recipient = element.value.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi)[0];
                     }
+
+                    if(element.name == 'Subject'){
+                        subject = element.value;
+                    }
                 });
 
-                sendEmail(sender, recipient, msgDetails.snippet, "On Vacation", element.id, gmail);
+                sendEmail(sender, recipient, subject, "On Vacation", element.id, element.threadId, gmail);
             }
         });
 

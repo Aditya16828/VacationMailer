@@ -3,7 +3,7 @@ import { Base64 } from "js-base64";
 import { google } from "googleapis";
 import { CLIENTID, CLIENTSECRET, CLIENTEMAIL } from "./serverConfig.js";
 
-async function sendEmail(mailTo, mailFrom, subject, body, id, gmail) {
+async function sendEmail(mailTo, mailFrom, subject, body, id, threadId, gmail) {
     try {
         const mail = new MailComposer({
             to: mailTo,
@@ -24,10 +24,11 @@ async function sendEmail(mailTo, mailFrom, subject, body, id, gmail) {
                 userId: "me",
                 requestBody: {
                     raw: encodedMessage,
+                    threadId: threadId
                 }
             });
 
-            console.log(`Message sent. Message Id: ${res.data.id}`);
+            console.log("Message Details:", res.data);
         });
     } catch (err) {
         console.error("Error sending email:", err);
